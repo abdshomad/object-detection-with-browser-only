@@ -1,0 +1,6 @@
+{
+  "name": "VisionEdge - Real-time Object & Pose Detection",
+  "description": "High-performance browser-based real-time object detection and human pose estimation (body, hands, face, holistic) with live webcam stream.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
