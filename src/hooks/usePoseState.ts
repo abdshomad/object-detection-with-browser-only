@@ -20,6 +20,10 @@ export function usePoseState() {
     setPoseSettings((prev) => ({ ...prev, ...patch }));
   }, []);
 
+  const handleSelectPoseVariant = useCallback((variant: PoseVariant) => {
+    setPoseSettings((prev) => ({ ...prev, activeVariant: variant }));
+  }, []);
+
   const handleCyclePoseVariant = useCallback(() => {
     const variants: PoseVariant[] = ['body', 'hands', 'face', 'holistic'];
     setPoseSettings((prev) => {
@@ -34,6 +38,7 @@ export function usePoseState() {
     setDetectionMode,
     poseSettings,
     handleUpdatePoseSettings,
+    handleSelectPoseVariant,
     handleCyclePoseVariant,
     currentPoses,
     setCurrentPoses,

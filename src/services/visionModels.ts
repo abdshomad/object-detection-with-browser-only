@@ -1,11 +1,13 @@
-import { FilesetResolver, PoseLandmarker, HandLandmarker } from '@mediapipe/tasks-vision';
+import { FilesetResolver, PoseLandmarker, HandLandmarker, FaceLandmarker } from '@mediapipe/tasks-vision';
 
 let visionResolver: Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>> | null = null;
 let poseLandmarker: PoseLandmarker | null = null;
 let handLandmarker: HandLandmarker | null = null;
+let faceLandmarker: FaceLandmarker | null = null;
 
 let isPoseLoading = false;
 let isHandLoading = false;
+let isFaceLoading = false;
 
 async function getVisionResolver() {
   if (!visionResolver) {
@@ -66,7 +68,33 @@ export async function getHandLandmarker(): Promise<HandLandmarker | null> {
   return handLandmarker;
 }
 
+export async function getFaceLandmarker(): Promise<FaceLandmarker | null> {
+  if (faceLandmarker) return faceLandmarker;
+  if (isFaceLoading) return null;
+  isFaceLoading = true;
+  try {
+    const vision = await getVisionResolver();
+    faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath:
+          'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float32/1/face_landmarker.task',
+        delegate: 'GPU',
+      },
+      runningMode: 'VIDEO',
+      numFaces: 4,
+      minFaceDetectionConfidence: 0.4,
+      minFacePresenceConfidence: 0.4,
+      minTrackingConfidence: 0.4,
+    });
+  } catch (err) {
+    console.warn('FaceLandmarker init error:', err);
+  } finally {
+    isFaceLoading = false;
+  }
+  return faceLandmarker;
+}
+
 export async function initAllPoseModels(): Promise<void> {
   // Preload in parallel on app launch
-  Promise.allSettled([getPoseLandmarker(), getHandLandmarker()]).catch(() => {});
+  Promise.allSettled([getPoseLandmarker(), getHandLandmarker(), getFaceLandmarker()]).catch(() => {});
 }

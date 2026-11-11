@@ -85,3 +85,12 @@ export const KEYPOINT_NAMES: Record<number, string> = {
   31: 'left foot index',
   32: 'right foot index',
 };
+
+/** COCO-17 skeleton topology (YOLO-Pose / RF-DETR Keypoint output layout) */
+export const COCO17_CONNECTIONS: PoseConnection[] = [
+  { start: 0, end: 1 }, { start: 0, end: 2 }, { start: 1, end: 3 }, { start: 2, end: 4 },
+  { start: 0, end: 5 }, { start: 0, end: 6 }, { start: 5, end: 6 },
+  { start: 5, end: 11 }, { start: 6, end: 12 }, { start: 11, end: 12 },
+  { start: 5, end: 7 }, { start: 7, end: 9 }, { start: 6, end: 8 }, { start: 8, end: 10 },
+  { start: 11, end: 13 }, { start: 13, end: 15 }, { start: 12, end: 14 }, { start: 14, end: 16 },
+];

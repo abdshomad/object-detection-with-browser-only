@@ -3,11 +3,13 @@ import { useState, useCallback, useEffect, RefObject } from 'react';
 interface UseCameraStreamProps {
   facingMode: 'user' | 'environment';
   videoRef: RefObject<HTMLVideoElement | null>;
+  enabled?: boolean;
 }
 
 export function useCameraStream({
   facingMode,
   videoRef,
+  enabled = true,
 }: UseCameraStreamProps) {
   const [cameraError, setCameraError] = useState<string | null>(null);
 
@@ -45,9 +47,13 @@ export function useCameraStream({
   }, [videoRef]);
 
   useEffect(() => {
+    if (!enabled) {
+      stopCamera();
+      return;
+    }
     startCamera();
     return () => stopCamera();
-  }, [facingMode, startCamera, stopCamera]);
+  }, [enabled, facingMode, startCamera, stopCamera]);
 
   return { cameraError, startCamera, stopCamera };
 }

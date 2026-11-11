@@ -6,6 +6,9 @@ import { BoundingBoxOverlay } from './BoundingBoxOverlay';
 import { PoseOverlay } from './PoseOverlay';
 import { useCameraStream } from './useCameraStream';
 import { runBrowserDetection } from '../services/modelEngine';
+import Hls from 'hls.js';
+import { VideoSource } from '../types/source';
+import { isServerPoseModel, detectServerPose } from '../services/serverPose';
 import { detectPoseVariants, initPoseModel } from '../services/poseVariantEngine';
 
 interface CameraStreamProps {
@@ -20,6 +23,8 @@ interface CameraStreamProps {
   showTrackId: boolean;
   detectionMode: DetectionMode;
   poseSettings: PoseSettings;
+  videoSource: VideoSource;
+  poseModelId: string;
   onUpdateTelemetry: (stats: Partial<TelemetryStats>) => void;
   onNewDetections: (objects: DetectedObject[]) => void;
   onNewPoses?: (poses: PoseVariantResult[]) => void;
@@ -37,6 +42,8 @@ export const CameraStream: React.FC<CameraStreamProps> = ({
   showTrackId,
   detectionMode,
   poseSettings,
+  videoSource,
+  poseModelId,
   onUpdateTelemetry,
   onNewDetections,
   onNewPoses,
@@ -55,10 +62,39 @@ export const CameraStream: React.FC<CameraStreamProps> = ({
     frames: 0,
   });
 
+  const isCameraSource = videoSource.kind === 'camera';
   const { cameraError, startCamera } = useCameraStream({
     facingMode,
     videoRef,
+    enabled: isCameraSource,
   });
+  const [sourceError, setSourceError] = useState<string | null>(null);
+
+  // Play URL / file / HLS (RTSP) sources in the same <video> element.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || videoSource.kind !== 'url') return;
+    setSourceError(null);
+    video.srcObject = null;
+    video.loop = true;
+    let hls: Hls | null = null;
+    if (videoSource.streamUrl.endsWith('.m3u8') && Hls.isSupported()) {
+      hls = new Hls({ lowLatencyMode: true });
+      hls.loadSource(videoSource.streamUrl);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.ERROR, (_e, data) => {
+        if (data.fatal) setSourceError(`Stream error: ${data.details}`);
+      });
+    } else {
+      video.src = videoSource.streamUrl;
+    }
+    video.play().catch(() => {});
+    return () => {
+      hls?.destroy();
+      video.removeAttribute('src');
+      video.load();
+    };
+  }, [videoSource, videoRef]);
 
   useEffect(() => {
     initPoseModel().catch(() => {});
@@ -118,12 +154,14 @@ export const CameraStream: React.FC<CameraStreamProps> = ({
           }
 
           if (detectionMode === 'pose' || detectionMode === 'both') {
-            currentPoses = await detectPoseVariants(
-              video,
-              poseSettings.activeVariant,
-              poseSettings.minConfidence,
-              currentObjects
-            );
+            currentPoses = isServerPoseModel(poseModelId)
+              ? await detectServerPose(video, poseModelId, poseSettings.minConfidence)
+              : await detectPoseVariants(
+                  video,
+                  poseSettings.activeVariant,
+                  poseSettings.minConfidence,
+                  currentObjects
+                );
           }
 
           if (isMounted) {
@@ -161,6 +199,7 @@ export const CameraStream: React.FC<CameraStreamProps> = ({
     selectedClasses,
     detectionMode,
     poseSettings,
+    poseModelId,
     onUpdateTelemetry,
     onNewDetections,
     onNewPoses,
@@ -174,9 +213,14 @@ export const CameraStream: React.FC<CameraStreamProps> = ({
       <video
         ref={videoRef}
         playsInline
-        muted
+        muted={isCameraSource}
         autoPlay
-        className="w-full h-full object-contain pointer-events-none"
+        loop={!isCameraSource}
+        controls={!isCameraSource}
+        className={`w-full h-full object-contain ${isCameraSource ? 'pointer-events-none' : ''}`}
+        onError={() => {
+          if (!isCameraSource) setSourceError('Could not play this video source. Check the link and try again.');
+        }}
       />
 
       {/* Real-time Bounding Box Overlay */}
@@ -208,8 +252,16 @@ export const CameraStream: React.FC<CameraStreamProps> = ({
         />
       )}
 
+      {!isCameraSource && sourceError && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center p-6 bg-slate-950/90 text-center z-10">
+          <h3 className="text-base font-semibold text-white mb-1">Video Source Error</h3>
+          <p className="text-xs text-slate-300 max-w-md mb-4">{sourceError}</p>
+          <p className="text-[11px] text-slate-500">Open Settings → Video Source to fix the link.</p>
+        </div>
+      )}
+
       {/* Camera Access Warning/Error Overlay */}
-      {cameraError && (
+      {isCameraSource && cameraError && (
         <div className="absolute inset-0 flex flex-col items-center justify-center p-6 bg-slate-950/90 text-center z-10">
           <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-3">
             <Camera className="w-6 h-6 text-amber-500" />

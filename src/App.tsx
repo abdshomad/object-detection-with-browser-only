@@ -14,9 +14,17 @@ import { SnapshotModal } from './components/SnapshotModal';
 import { downloadAndInitModel } from './services/modelEngine';
 import { persistSnapshot, getStoredSnapshots } from './services/apiClient';
 import { usePoseState } from './hooks/usePoseState';
+import { VideoSource } from './types/source';
+import { resolveVideoUrl, stopRtspSource } from './services/videoSource';
+import { warmupServerPose, isServerPoseModel } from './services/serverPose';
 
 export default function App() {
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
+  const [videoSource, setVideoSource] = useState<VideoSource>({ kind: 'camera' });
+  const [sourceBusy, setSourceBusy] = useState(false);
+  const [sourceError, setSourceError] = useState<string | null>(null);
+  const [poseModelId, setPoseModelId] = useState<string>('mediapipe');
+  const [settingsTab, setSettingsTab] = useState<'params' | 'pose' | 'camera' | 'models' | 'snapshots'>('params');
   const [models, setModels] = useState<ModelOption[]>(getStoredDetectorModels);
 
   const [selectedModelId, setSelectedModelId] = useState<string>('tfjs-coco-ssd');
@@ -38,6 +46,7 @@ export default function App() {
     setDetectionMode,
     poseSettings,
     handleUpdatePoseSettings,
+    handleSelectPoseVariant: handleSelectPoseVariantHook,
     handleCyclePoseVariant,
     currentPoses,
     setCurrentPoses,
@@ -118,6 +127,52 @@ export default function App() {
     [models, handleDownloadModel]
   );
 
+  const handleSelectPoseVariant = useCallback(
+    (variant: typeof poseSettings.activeVariant) => {
+      handleSelectPoseVariantHook(variant);
+      setPoseModelId('mediapipe');
+      if (detectionMode === 'objects') setDetectionMode('both');
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [detectionMode]
+  );
+
+  const handleLoadSourceUrl = useCallback(async (url: string) => {
+    setSourceBusy(true);
+    setSourceError(null);
+    try {
+      if (videoSource.kind === 'url') await stopRtspSource(videoSource.streamUrl);
+      const resolved = await resolveVideoUrl(url);
+      setVideoSource(resolved);
+    } catch (err: unknown) {
+      setSourceError(err instanceof Error ? err.message : 'Failed to load video source');
+    } finally {
+      setSourceBusy(false);
+    }
+  }, [videoSource]);
+
+  const handleSelectSourceFile = useCallback((file: File) => {
+    setSourceError(null);
+    setVideoSource({
+      kind: 'url', type: 'file', title: file.name,
+      streamUrl: URL.createObjectURL(file), sourceUrl: '',
+    });
+  }, []);
+
+  const handleUseCamera = useCallback(async () => {
+    if (videoSource.kind === 'url') await stopRtspSource(videoSource.streamUrl);
+    setSourceError(null);
+    setVideoSource({ kind: 'camera' });
+  }, [videoSource]);
+
+  const handleSelectPoseModel = useCallback(async (id: string) => {
+    setPoseModelId(id);
+    if (isServerPoseModel(id)) {
+      warmupServerPose(id).catch((err) => console.warn('Pose warmup failed:', err));
+      if (detectionMode === 'objects') setDetectionMode('both');
+    }
+  }, [detectionMode, setDetectionMode]);
+
   const handleToggleClass = (className: string) => {
     setSelectedClasses((prev) =>
       prev.includes(className) ? prev.filter((c) => c !== className) : [...prev, className]
@@ -176,6 +231,8 @@ export default function App() {
         showTrackId={showTrackId}
         detectionMode={detectionMode}
         poseSettings={poseSettings}
+        videoSource={videoSource}
+        poseModelId={poseModelId}
         onUpdateTelemetry={(delta) => setTelemetry((prev) => ({ ...prev, ...delta }))}
         onNewDetections={setCurrentObjects}
         onNewPoses={setCurrentPoses}
@@ -186,13 +243,20 @@ export default function App() {
         facingMode={facingMode}
         onToggleFacingMode={handleToggleFacingMode}
         modelName={activeModel.name}
+        models={models}
+        selectedModelId={selectedModelId}
+        onSelectModel={handleSelectModel}
+        loadingModelId={loadingModelId}
         activeCount={currentObjects.length}
         activePoseCount={currentPoses.length}
         detectionMode={detectionMode}
         onChangeDetectionMode={setDetectionMode}
         activePoseVariant={poseSettings.activeVariant}
-        onCyclePoseVariant={handleCyclePoseVariant}
-        onOpenSettings={() => setIsSettingsOpen(true)}
+        onSelectPoseVariant={handleSelectPoseVariant}
+        poseModelId={poseModelId}
+        onSelectPoseModel={handleSelectPoseModel}
+        onOpenVideoSource={() => { setSettingsTab('camera'); setIsSettingsOpen(true); }}
+        onOpenSettings={() => { setSettingsTab('params'); setIsSettingsOpen(true); }}
         onTakeSnapshot={handleTakeSnapshot}
         isSettingsOpen={isSettingsOpen}
       />
@@ -200,6 +264,15 @@ export default function App() {
       {/* Settings Modal */}
       <SettingsModal
         isOpen={isSettingsOpen}
+        initialTab={settingsTab}
+        videoSource={videoSource}
+        sourceBusy={sourceBusy}
+        sourceError={sourceError}
+        onLoadSourceUrl={handleLoadSourceUrl}
+        onSelectSourceFile={handleSelectSourceFile}
+        onUseCamera={handleUseCamera}
+        poseModelId={poseModelId}
+        onSelectPoseModel={handleSelectPoseModel}
         onClose={() => setIsSettingsOpen(false)}
         facingMode={facingMode}
         onChangeFacingMode={setFacingMode}

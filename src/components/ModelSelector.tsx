@@ -8,6 +8,8 @@ import {
   Layers,
   Sparkles,
   ExternalLink,
+  Server,
+  MonitorSmartphone,
 } from 'lucide-react';
 import { ModelOption } from '../types/detection';
 
@@ -26,29 +28,59 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   onDownloadModel,
   loadingModelId = null,
 }) => {
+  const groups = [
+    {
+      key: 'server',
+      title: 'Server GPU Models',
+      description: 'Weights in models/ on this server — inference runs on the server NVIDIA GPU',
+      icon: Server,
+      models: models.filter((m) => m.backend === 'Server GPU'),
+    },
+    {
+      key: 'browser',
+      title: 'Browser Models',
+      description: 'Real-time edge runtimes running 100% on-device in your browser',
+      icon: MonitorSmartphone,
+      models: models.filter((m) => m.backend !== 'Server GPU'),
+    },
+  ];
+
   return (
-    <div className="w-full flex flex-col gap-4">
+    <div className="w-full flex flex-col gap-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
         <div>
           <h2 className="text-sm font-semibold text-white flex items-center gap-2">
             <Layers className="w-4 h-4 text-cyan-400" />
-            Browser Object Detection Engines ({models.length} Models)
+            Object Detection Models ({models.length} Models)
           </h2>
           <p className="text-xs text-slate-400">
-            Real-time edge neural network runtimes running 100% on-device in the browser
+            Server GPU models run on this server · Browser models run on your device
           </p>
         </div>
 
         <div className="flex items-center gap-2 text-xs font-mono">
-          <span className="text-slate-400">Ready in Memory:</span>
+          <span className="text-slate-400">Ready:</span>
           <span className="font-semibold text-emerald-400">
             {models.filter((m) => m.downloadStatus === 'ready').length} / {models.length}
           </span>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-        {models.map((model) => {
+      {groups.map((group) => (
+        <div key={group.key} className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <group.icon className="w-4 h-4 text-cyan-400" />
+            <h3 className="text-xs font-semibold text-white uppercase tracking-wider">
+              {group.title}
+            </h3>
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
+              {group.models.length}
+            </span>
+            <span className="text-[11px] text-slate-500 hidden sm:inline">{group.description}</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            {group.models.map((model) => {
           const isSelected = model.id === selectedModelId;
           const isDownloading = model.downloadStatus === 'downloading' || loadingModelId === model.id;
           const isReady = model.downloadStatus === 'ready';
@@ -154,7 +186,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                       ) : (
                         <>
                           <Download className="w-3.5 h-3.5" />
-                          <span>Load into Browser</span>
+                          <span>{model.backend === 'Server GPU' ? 'Load on Server GPU' : 'Load into Browser'}</span>
                         </>
                       )}
                     </button>
@@ -173,10 +205,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                   )}
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+              </div>
+            );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 };

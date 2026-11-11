@@ -26,7 +26,7 @@ export interface ModelOption {
   confidenceAccuracy: string;
   architecture: string;
   cocoClassesCount: number;
-  backend: 'WebGL' | 'WASM' | 'WebGPU' | 'WebNN';
+  backend: 'WebGL' | 'WASM' | 'WebGPU' | 'WebNN' | 'Server GPU';
   downloadStatus: DownloadStatus;
   downloadProgress?: number;
   errorMessage?: string;

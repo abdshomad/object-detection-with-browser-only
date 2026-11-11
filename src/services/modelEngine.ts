@@ -7,6 +7,7 @@ import {
   loadOnnxDetector,
   detectWithOnnx,
 } from './detectorImplementations';
+import { isServerModel, warmupServerModel, detectOnServer } from './serverDetector';
 import {
   loadGenericDetector,
   detectWithTransformersJs,
@@ -26,6 +27,10 @@ export async function downloadAndInitModel(
   modelId: string,
   onProgress?: (pct: number) => void
 ): Promise<void> {
+  if (isServerModel(modelId)) {
+    await warmupServerModel(modelId, onProgress);
+    return;
+  }
   switch (modelId) {
     case 'tfjs-coco-ssd':
       await loadTfjsDetector(onProgress);
@@ -55,6 +60,10 @@ export async function runBrowserDetection(
   let objects: DetectedObject[] = [];
 
   try {
+    if (isServerModel(modelId)) {
+      objects = await detectOnServer(video, modelId, minConfidence, maxDetections);
+      return { objects, latencyMs: Math.round(performance.now() - start) };
+    }
     switch (modelId) {
       case 'mediapipe-detector':
         objects = await detectWithMediaPipe(video, minConfidence, maxDetections);

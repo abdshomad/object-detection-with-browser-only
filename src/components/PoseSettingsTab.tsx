@@ -7,6 +7,8 @@ interface PoseSettingsTabProps {
   onChangeDetectionMode: (mode: DetectionMode) => void;
   settings: PoseSettings;
   onUpdateSettings: (patch: Partial<PoseSettings>) => void;
+  poseModelId?: string;
+  onSelectPoseModel?: (id: string) => void;
 }
 
 export const PoseSettingsTab: React.FC<PoseSettingsTabProps> = ({
@@ -14,6 +16,8 @@ export const PoseSettingsTab: React.FC<PoseSettingsTabProps> = ({
   onChangeDetectionMode,
   settings,
   onUpdateSettings,
+  poseModelId = 'mediapipe',
+  onSelectPoseModel,
 }) => {
   const variants: { id: PoseVariant; label: string; desc: string; icon: React.ReactNode }[] = [
     {
@@ -51,6 +55,27 @@ export const PoseSettingsTab: React.FC<PoseSettingsTabProps> = ({
 
   return (
     <div className="flex flex-col gap-5 text-slate-100">
+    <div className="flex flex-col gap-2 p-4 rounded-xl border border-slate-800 bg-slate-950/60">
+      <span className="text-sm font-semibold text-white">Pose Model</span>
+      <p className="text-xs text-slate-400">MediaPipe runs in your browser (body / face / hands / holistic). YOLO Pose and RF-DETR Pose run on the server GPU (full body, COCO-17).</p>
+      <select
+        value={poseModelId}
+        onChange={(e) => onSelectPoseModel?.(e.target.value)}
+        className="mt-1 px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-cyan-500 cursor-pointer"
+      >
+        <optgroup label="Browser">
+          <option value="mediapipe">MediaPipe Pose (browser)</option>
+        </optgroup>
+        <optgroup label="Server GPU">
+          <option value="yolo26n-pose">YOLO26n Pose</option>
+          <option value="yolo26s-pose">YOLO26s Pose</option>
+          <option value="yolo26m-pose">YOLO26m Pose</option>
+          <option value="yolo26l-pose">YOLO26l Pose</option>
+          <option value="yolo26x-pose">YOLO26x Pose</option>
+          <option value="rf-detr-pose">RF-DETR Pose (Keypoint XLarge)</option>
+        </optgroup>
+      </select>
+    </div>
       {/* Primary Detection Mode Selector */}
       <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/70">
         <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">

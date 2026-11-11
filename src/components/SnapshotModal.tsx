@@ -75,7 +75,7 @@ export const SnapshotModal: React.FC<SnapshotModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 overflow-y-auto flex flex-col gap-5">
+        <div className="hud-scroll p-6 overflow-y-auto flex flex-col gap-5">
           {/* Snapshot Image Preview */}
           <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-black border border-slate-800">
             <img

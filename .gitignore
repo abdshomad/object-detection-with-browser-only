@@ -6,3 +6,21 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Downloaded model weights (YOLO26 .pt/.onnx) - served locally, not committed
+models/
+
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Downloaded / cached video sources (YouTube/Drive/RTSP captures)
+data/sources/
+
+# Local PM2 config and npm lockfile (project uses bun.lock)
+ecosystem.config.cjs
+package-lock.json

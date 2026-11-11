@@ -1,9 +1,16 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig} from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
+  // Allowed hostnames come from .env: ALLOWED_HOSTS=host1,host2
+  const env = loadEnv(mode, process.cwd(), '');
+  const allowedHosts = (env.ALLOWED_HOSTS ?? '')
+    .split(',')
+    .map((h) => h.trim())
+    .filter(Boolean);
+
   return {
     plugins: [react(), tailwindcss()],
     resolve: {
@@ -11,7 +18,13 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    preview: {
+      allowedHosts,
+      proxy: { '/api': 'http://127.0.0.1:4056' },
+    },
     server: {
+      allowedHosts,
+      proxy: { '/api': 'http://127.0.0.1:4056' },
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',

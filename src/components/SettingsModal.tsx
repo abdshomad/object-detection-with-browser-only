@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Sliders } from 'lucide-react';
 import { BoxStyle, ModelOption, TelemetryStats, DetectionSnapshot } from '../types/detection';
 import { DetectionMode, PoseSettings } from '../types/pose';
@@ -11,6 +11,15 @@ import { CameraSettingsTab } from './CameraSettingsTab';
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialTab?: 'params' | 'pose' | 'camera' | 'models' | 'snapshots';
+  videoSource?: import('../types/source').VideoSource;
+  sourceBusy?: boolean;
+  sourceError?: string | null;
+  onLoadSourceUrl?: (url: string) => void;
+  onSelectSourceFile?: (file: File) => void;
+  onUseCamera?: () => void;
+  poseModelId?: string;
+  onSelectPoseModel?: (id: string) => void;
   facingMode: 'user' | 'environment';
   onChangeFacingMode: (mode: 'user' | 'environment') => void;
   models: ModelOption[];
@@ -48,6 +57,15 @@ interface SettingsModalProps {
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
+  initialTab = 'params',
+  videoSource,
+  sourceBusy = false,
+  sourceError = null,
+  onLoadSourceUrl,
+  onSelectSourceFile,
+  onUseCamera,
+  poseModelId = 'mediapipe',
+  onSelectPoseModel,
   facingMode,
   onChangeFacingMode,
   models,
@@ -83,6 +101,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'params' | 'pose' | 'camera' | 'models' | 'snapshots'>('params');
 
+  useEffect(() => {
+    if (isOpen) setActiveTab(initialTab);
+  }, [isOpen, initialTab]);
+
   if (!isOpen) return null;
 
   return (
@@ -111,11 +133,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex items-center gap-2 px-6 pt-3 border-b border-slate-800 text-xs font-medium overflow-x-auto">
+        <div className="flex items-center gap-2 px-6 pt-3 border-b border-slate-800 text-xs font-medium overflow-x-auto hud-scroll">
           {[
             { id: 'params', label: 'Object Boxes' },
             { id: 'pose', label: 'Pose & Variants' },
-            { id: 'camera', label: 'Camera (Front/Rear)' },
+            { id: 'camera', label: 'Video Source & Camera' },
             { id: 'models', label: `Engines (${models.length})` },
             { id: 'snapshots', label: `Snapshots (${snapshots.length})` },
           ].map((t) => (
@@ -134,7 +156,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Tab Content Body */}
-        <div className="p-6 overflow-y-auto flex-1 flex flex-col gap-5">
+        <div className="hud-scroll p-6 overflow-y-auto flex-1 flex flex-col gap-5">
           {activeTab === 'params' && (
             <ControlPanel
               minConfidence={minConfidence}
@@ -163,6 +185,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               onChangeDetectionMode={onChangeDetectionMode}
               settings={poseSettings}
               onUpdateSettings={onUpdatePoseSettings}
+              poseModelId={poseModelId}
+              onSelectPoseModel={onSelectPoseModel ?? (() => {})}
             />
           )}
 
@@ -172,6 +196,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               onChangeFacingMode={onChangeFacingMode}
               fps={telemetry.fps}
               resolution={telemetry.currentResolution}
+              videoSource={videoSource ?? { kind: 'camera' }}
+              sourceBusy={sourceBusy}
+              sourceError={sourceError}
+              onLoadSourceUrl={onLoadSourceUrl ?? (() => {})}
+              onSelectSourceFile={onSelectSourceFile ?? (() => {})}
+              onUseCamera={onUseCamera ?? (() => {})}
             />
           )}
 
