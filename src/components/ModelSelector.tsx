@@ -19,6 +19,8 @@ interface ModelSelectorProps {
   onSelectModel: (modelId: string) => void;
   onDownloadModel: (modelId: string) => void;
   loadingModelId?: string | null;
+  onUploadModel?: (file: File, name: string) => Promise<string>;
+  onDeleteModel?: (id: string) => void;
 }
 
 export const ModelSelector: React.FC<ModelSelectorProps> = ({
@@ -27,7 +29,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   onSelectModel,
   onDownloadModel,
   loadingModelId = null,
+  onUploadModel,
+  onDeleteModel,
 }) => {
+  const [uploadName, setUploadName] = React.useState('');
+  const [uploadBusy, setUploadBusy] = React.useState(false);
+  const [uploadMsg, setUploadMsg] = React.useState<string | null>(null);
   const groups = [
     {
       key: 'server',
@@ -64,6 +71,50 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             {models.filter((m) => m.downloadStatus === 'ready').length} / {models.length}
           </span>
         </div>
+      </div>
+
+      {/* Upload custom YOLO model */}
+      <div className="flex flex-col gap-2 p-4 rounded-xl border border-dashed border-slate-700 bg-slate-950/60">
+        <span className="text-sm font-semibold text-white">Upload Your YOLO26 Model (.pt)</span>
+        <p className="text-xs text-slate-400">
+          Upload a YOLO26n (or any YOLO detection) checkpoint trained on your classes. It is validated and
+          saved on the server, then appears under Server GPU Models — select it and run it on camera,
+          YouTube/Drive/RTSP, or an uploaded video.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-2 mt-1">
+          <input
+            value={uploadName}
+            onChange={(e) => setUploadName(e.target.value)}
+            placeholder="Model name (optional)"
+            className="px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500"
+          />
+          <label className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-xs font-medium text-white transition-all cursor-pointer">
+            {uploadBusy ? 'Uploading…' : 'Choose .pt file & Upload'}
+            <input
+              type="file"
+              accept=".pt"
+              className="hidden"
+              disabled={uploadBusy}
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                e.target.value = '';
+                if (!f || !onUploadModel) return;
+                setUploadBusy(true);
+                setUploadMsg(null);
+                try {
+                  const id = await onUploadModel(f, uploadName.trim());
+                  setUploadMsg(`Uploaded — now select “Load on Server GPU” for your model below.`);
+                  onSelectModel(id);
+                } catch (err: unknown) {
+                  setUploadMsg(err instanceof Error ? err.message : 'Upload failed');
+                } finally {
+                  setUploadBusy(false);
+                }
+              }}
+            />
+          </label>
+        </div>
+        {uploadMsg && <p className="text-xs text-cyan-200 bg-cyan-950/40 border border-cyan-500/30 rounded-lg px-3 py-2">{uploadMsg}</p>}
       </div>
 
       {groups.map((group) => (
@@ -120,6 +171,15 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                     </h3>
                   </div>
 
+                  {model.id.startsWith('custom-') && onDeleteModel && (
+                    <button
+                      onClick={() => onDeleteModel(model.id)}
+                      title="Delete this uploaded model from the server"
+                      className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-red-950/60 text-red-300 border border-red-500/30 hover:bg-red-900/60 cursor-pointer"
+                    >
+                      Delete
+                    </button>
+                  )}
                   {/* Status Indicator Badge */}
                   {isReady ? (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-emerald-950/60 text-emerald-300 border border-emerald-500/30">

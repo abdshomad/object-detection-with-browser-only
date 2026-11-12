@@ -115,8 +115,32 @@ export function getConfidenceTheme(score: number): {
 /**
  * Returns consistent distinct color by class name
  */
+/**
+ * Display label aliases: the underlying detector class stays untouched in
+ * the model, but users see the site term. COCO has no fire-extinguisher
+ * class, so APAR (fire extinguisher) units are detected as "fire hydrant"
+ * and relabeled APAR everywhere (overlay, filters, snapshots).
+ */
+export const CLASS_LABEL_ALIASES: Record<string, string> = {
+  'fire hydrant': 'APAR',
+  'fire extinguisher': 'APAR',
+};
+
+export function displayClassLabel(className: string): string {
+  return CLASS_LABEL_ALIASES[className.toLowerCase()] ?? className;
+}
+
+/** Classes never shown to the user (filtered out at detection time). */
+export const EXCLUDED_CLASS_NAMES = new Set(['pipe', 'wall', 'floor']);
+
+export function isExcludedClass(className: string): boolean {
+  return EXCLUDED_CLASS_NAMES.has(className.toLowerCase());
+}
+
 const CLASS_COLORS: Record<string, string> = {
   person: '#06B6D4',
+  'fire extinguisher': '#DC2626',
+  'fire hydrant': '#DC2626',
   'cell phone': '#8B5CF6',
   laptop: '#10B981',
   cup: '#F59E0B',

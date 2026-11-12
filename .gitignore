@@ -18,9 +18,10 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 
-# Downloaded / cached video sources (YouTube/Drive/RTSP captures)
-data/sources/
 
 # Local PM2 config and npm lockfile (project uses bun.lock)
 ecosystem.config.cjs
 package-lock.json
+
+# Uploaded / fetched videos (user uploads, YouTube/Drive/RTSP cache)
+videos/

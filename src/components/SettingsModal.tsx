@@ -20,6 +20,8 @@ interface SettingsModalProps {
   onUseCamera?: () => void;
   poseModelId?: string;
   onSelectPoseModel?: (id: string) => void;
+  onUploadModel?: (file: File, name: string) => Promise<string>;
+  onDeleteModel?: (id: string) => void;
   facingMode: 'user' | 'environment';
   onChangeFacingMode: (mode: 'user' | 'environment') => void;
   models: ModelOption[];
@@ -66,6 +68,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onUseCamera,
   poseModelId = 'mediapipe',
   onSelectPoseModel,
+  onUploadModel,
+  onDeleteModel,
   facingMode,
   onChangeFacingMode,
   models,
@@ -212,6 +216,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               onSelectModel={onSelectModel}
               onDownloadModel={onDownloadModel}
               loadingModelId={loadingModelId}
+              onUploadModel={onUploadModel}
+              onDeleteModel={onDeleteModel}
             />
           )}
 

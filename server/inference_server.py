@@ -41,7 +41,7 @@ RF_CLASSES = {"rf-detr-nano": "RFDETRNano", "rf-detr-small": "RFDETRSmall",
 # RF-DETR returns sparse COCO category ids (1-90 with gaps), not list positions.
 COCO_ID_TO_NAME = {
     1: "person", 2: "bicycle", 3: "car", 4: "motorcycle", 5: "airplane", 6: "bus",
-    7: "train", 8: "truck", 9: "boat", 10: "traffic light", 11: "fire hydrant",
+    7: "train", 8: "truck", 9: "boat", 10: "traffic light", 11: "APAR",  # COCO fire hydrant -> site term APAR (fire extinguisher)
     13: "stop sign", 14: "parking meter", 15: "bench", 16: "bird", 17: "cat",
     18: "dog", 19: "horse", 20: "sheep", 21: "cow", 22: "elephant", 23: "bear",
     24: "zebra", 25: "giraffe", 27: "backpack", 28: "umbrella", 31: "handbag",
@@ -67,6 +67,14 @@ def _load(model_id: str):
     if model_id in _loaded:
         return _loaded[model_id]
     if model_id not in CATALOG:
+        reg = _custom_registry()
+        if model_id in reg:
+            from ultralytics import YOLO
+
+            model = YOLO(str(CUSTOM_DIR / reg[model_id]["file"]))
+            model.to(DEVICE)
+            _loaded[model_id] = model
+            return model
         raise HTTPException(404, f"unknown model: {model_id}")
     family, filename, _name = CATALOG[model_id]
     ckpt = MODELS_DIR / filename
@@ -95,18 +103,24 @@ def health():
 
 @app.get("/api/models")
 def list_models():
-    return [
+    builtin = [
         {"id": mid, "family": fam, "name": name, "file": f"models/{fn}",
          "available": (MODELS_DIR / fn).exists(), "loaded": mid in _loaded}
         for mid, (fam, fn, name) in CATALOG.items()
     ]
+    customs = [
+        {"id": mid, "family": "custom", "name": e["name"], "file": f"models/custom/{e['file']}",
+         "available": True, "loaded": mid in _loaded, "classes": e.get("classes", [])}
+        for mid, e in _custom_registry().items()
+    ]
+    return builtin + customs
 
 
 @app.post("/api/detect/{model_id}")
 async def detect(model_id: str, frame: UploadFile = File(...),
                  confidence: float = Query(0.5, ge=0.0, le=1.0),
                  max_detections: int = Query(10, ge=1, le=100)):
-    if model_id not in CATALOG:
+    if model_id not in CATALOG and model_id not in _custom_registry():
         raise HTTPException(404, f"unknown model: {model_id}")
     raw = await frame.read()
     if len(raw) > MAX_UPLOAD_BYTES:
@@ -122,7 +136,7 @@ async def detect(model_id: str, frame: UploadFile = File(...),
     objects: list[dict] = []
     with _lock:
         model = _load(model_id)
-        family = CATALOG[model_id][0]
+        family = CATALOG[model_id][0] if model_id in CATALOG else "yolo26"
         if family == "yolo26":
             res = model.predict(img, conf=confidence, device=DEVICE, verbose=False)[0]
             names = res.names
@@ -203,7 +217,7 @@ def warmup_any(model_id: str):
     with _lock:
         if model_id in POSE_CATALOG:
             _load_pose(model_id)
-        elif model_id in CATALOG:
+        elif model_id in CATALOG or model_id in _custom_registry():
             _load(model_id)
         else:
             raise HTTPException(404, f"unknown model: {model_id}")
@@ -283,7 +297,7 @@ from urllib.parse import urlparse as _urlparse
 from fastapi.responses import FileResponse as _FileResponse
 from pydantic import BaseModel as _BaseModel
 
-SOURCE_DIR = ROOT / "data" / "sources"
+SOURCE_DIR = ROOT / "videos"
 SOURCE_DIR.mkdir(parents=True, exist_ok=True)
 MAX_SOURCE_BYTES = 1 * 1024 * 1024 * 1024  # 1 GB per source video
 YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"}
@@ -473,3 +487,97 @@ def stop_source(source_id: str):
     if proc and proc.poll() is None:
         proc.terminate()
     return {"id": source_id, "stopped": proc is not None}
+
+# ---------------------------------------------------------------------------
+# Custom YOLO model upload: user uploads a YOLO26n (.pt) checkpoint, the
+# server validates + registers it, and it becomes selectable like the
+# built-in server GPU models (then usable on any video source / upload).
+# ---------------------------------------------------------------------------
+CUSTOM_DIR = MODELS_DIR / "custom"
+CUSTOM_DIR.mkdir(parents=True, exist_ok=True)
+CUSTOM_INDEX = CUSTOM_DIR / "index.json"
+MAX_MODEL_BYTES = 500 * 1024 * 1024
+
+
+def _custom_registry() -> dict:
+    if CUSTOM_INDEX.exists():
+        try:
+            return _json.loads(CUSTOM_INDEX.read_text())
+        except Exception:
+            return {}
+    return {}
+
+
+def _save_custom_registry(reg: dict) -> None:
+    CUSTOM_INDEX.write_text(_json.dumps(reg, indent=2))
+
+
+@app.post("/api/model/upload")
+async def upload_model(file: UploadFile = File(...), name: str = ""):
+    filename = file.filename or "custom.pt"
+    if not filename.lower().endswith(".pt"):
+        raise HTTPException(400, "Only YOLO .pt checkpoint files are supported")
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(400, "empty file")
+    if len(raw) > MAX_MODEL_BYTES:
+        raise HTTPException(413, "model file exceeds 500 MB limit")
+    slug = _re.sub(r"[^a-z0-9]+", "-", Path(filename).stem.lower()).strip("-")[:32] or "yolo"
+    mid = f"custom-{slug}-{hashlib.sha256(raw).hexdigest()[:6]}"
+    dest = CUSTOM_DIR / f"{mid}.pt"
+    dest.write_bytes(raw)
+    # Validate by actually loading it and reading its task/classes.
+    try:
+        from ultralytics import YOLO
+
+        probe = YOLO(str(dest))
+        task = str(getattr(probe, "task", "detect"))
+        classes = [str(v) for v in (probe.names or {}).values()] if isinstance(probe.names, dict) else [str(v) for v in (probe.names or [])]
+        del probe
+    except Exception as exc:
+        dest.unlink(missing_ok=True)
+        raise HTTPException(400, f"File could not be loaded as a YOLO model: {str(exc)[:250]}")
+    if task not in ("detect", ""):
+        raise HTTPException(400, f"Only detection models are supported here (this file is task='{task}')")
+    display = name.strip() or Path(filename).stem
+    reg = _custom_registry()
+    reg[mid] = {"name": display, "file": dest.name, "classes": classes, "sizeBytes": len(raw)}
+    _save_custom_registry(reg)
+    _loaded.pop(mid, None)
+    return {"id": mid, "name": display, "file": f"models/custom/{dest.name}",
+            "classes": classes, "sizeBytes": len(raw), "task": task or "detect"}
+
+
+@app.delete("/api/model/{model_id}")
+def delete_custom_model(model_id: str):
+    reg = _custom_registry()
+    entry = reg.pop(model_id, None)
+    if entry is None:
+        raise HTTPException(404, "unknown custom model")
+    (CUSTOM_DIR / entry["file"]).unlink(missing_ok=True)
+    _save_custom_registry(reg)
+    _loaded.pop(model_id, None)
+    return {"id": model_id, "deleted": True}
+
+
+@app.post("/api/video/upload")
+async def upload_video(file: UploadFile = File(...)):
+    """Save a user-uploaded video into videos/ and return a stream URL."""
+    filename = file.filename or "upload.mp4"
+    ext = Path(filename).suffix.lower()
+    if ext not in DIRECT_EXTS:
+        raise HTTPException(400, f"Unsupported video type '{ext}' (use .mp4/.webm/.mov/.m4v/.mkv)")
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(400, "empty file")
+    if len(raw) > MAX_SOURCE_BYTES:
+        raise HTTPException(413, "video exceeds 1 GB limit")
+    sid = hashlib.sha256(raw).hexdigest()[:16]
+    dest = SOURCE_DIR / f"{sid}{ext}"
+    if not dest.exists():
+        dest.write_bytes(raw)
+        (SOURCE_DIR / f"{sid}.json").write_text(
+            _json.dumps({"type": "file", "title": filename, "url": ""}))
+    return {"id": sid, "type": "file", "title": filename,
+            "streamUrl": f"/api/source/stream/{sid}", "sizeBytes": len(raw),
+            "cached": dest.exists()}

@@ -15,7 +15,7 @@ import { downloadAndInitModel } from './services/modelEngine';
 import { persistSnapshot, getStoredSnapshots } from './services/apiClient';
 import { usePoseState } from './hooks/usePoseState';
 import { VideoSource } from './types/source';
-import { resolveVideoUrl, stopRtspSource } from './services/videoSource';
+import { resolveVideoUrl, stopRtspSource, uploadVideoFile, uploadCustomModel, fetchCustomModels, deleteCustomModel } from './services/videoSource';
 import { warmupServerPose, isServerPoseModel } from './services/serverPose';
 
 export default function App() {
@@ -151,12 +151,17 @@ export default function App() {
     }
   }, [videoSource]);
 
-  const handleSelectSourceFile = useCallback((file: File) => {
+  const handleSelectSourceFile = useCallback(async (file: File) => {
+    setSourceBusy(true);
     setSourceError(null);
-    setVideoSource({
-      kind: 'url', type: 'file', title: file.name,
-      streamUrl: URL.createObjectURL(file), sourceUrl: '',
-    });
+    try {
+      const uploaded = await uploadVideoFile(file);
+      setVideoSource(uploaded);
+    } catch (err: unknown) {
+      setSourceError(err instanceof Error ? err.message : 'Video upload failed');
+    } finally {
+      setSourceBusy(false);
+    }
   }, []);
 
   const handleUseCamera = useCallback(async () => {
@@ -164,6 +169,63 @@ export default function App() {
     setSourceError(null);
     setVideoSource({ kind: 'camera' });
   }, [videoSource]);
+
+  // Custom uploaded YOLO models (server GPU) merged into the selector list.
+  useEffect(() => {
+    fetchCustomModels()
+      .then((customs) => {
+        if (!customs.length) return;
+        setModels((prev) => {
+          const known = new Set(prev.map((m) => m.id));
+          const extra: ModelOption[] = customs
+            .filter((c) => !known.has(c.id))
+            .map((c) => ({
+              id: c.id,
+              name: `${c.name} (Custom)`,
+              family: 'Ultralytics' as const,
+              tagline: 'Your uploaded YOLO model — runs on server NVIDIA GPU',
+              sizeMb: 0,
+              expectedLatencyMs: 20,
+              inputResolution: '640x640 px',
+              confidenceAccuracy: `${c.classes?.length ?? 80} classes`,
+              architecture: 'Custom YOLO checkpoint (.pt, server CUDA)',
+              cocoClassesCount: c.classes?.length ?? 80,
+              backend: 'Server GPU' as const,
+              downloadStatus: 'not_downloaded' as const,
+              downloadProgress: 0,
+            }));
+          return [...prev, ...extra];
+        });
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleUploadModel = useCallback(async (file: File, name: string) => {
+    const uploaded = await uploadCustomModel(file, name);
+    const option: ModelOption = {
+      id: uploaded.id,
+      name: `${uploaded.name} (Custom)`,
+      family: 'Ultralytics',
+      tagline: 'Your uploaded YOLO model — runs on server NVIDIA GPU',
+      sizeMb: Math.round((uploaded.sizeBytes / 1e6) * 10) / 10,
+      expectedLatencyMs: 20,
+      inputResolution: '640x640 px',
+      confidenceAccuracy: `${uploaded.classes.length} classes`,
+      architecture: 'Custom YOLO checkpoint (.pt, server CUDA)',
+      cocoClassesCount: uploaded.classes.length,
+      backend: 'Server GPU',
+      downloadStatus: 'not_downloaded',
+      downloadProgress: 0,
+    };
+    setModels((prev) => [...prev.filter((m) => m.id !== uploaded.id), option]);
+    return uploaded.id;
+  }, []);
+
+  const handleDeleteModel = useCallback(async (id: string) => {
+    await deleteCustomModel(id);
+    setModels((prev) => prev.filter((m) => m.id !== id));
+    setSelectedModelId((cur) => (cur === id ? 'tfjs-coco-ssd' : cur));
+  }, []);
 
   const handleSelectPoseModel = useCallback(async (id: string) => {
     setPoseModelId(id);
@@ -273,6 +335,8 @@ export default function App() {
         onUseCamera={handleUseCamera}
         poseModelId={poseModelId}
         onSelectPoseModel={handleSelectPoseModel}
+        onUploadModel={handleUploadModel}
+        onDeleteModel={handleDeleteModel}
         onClose={() => setIsSettingsOpen(false)}
         facingMode={facingMode}
         onChangeFacingMode={setFacingMode}

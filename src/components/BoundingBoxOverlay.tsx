@@ -4,6 +4,7 @@ import {
   formatConfidence,
   getConfidenceTheme,
   fitBoundingBoxToView,
+  displayClassLabel,
 } from '../utils/boxCalculations';
 
 interface BoundingBoxOverlayProps {
@@ -122,7 +123,7 @@ export const BoundingBoxOverlay: React.FC<BoundingBoxOverlayProps> = ({
                 color: '#FFFFFF',
               }}
             >
-              <span className="capitalize">{obj.class}</span>
+              <span className="capitalize">{displayClassLabel(obj.class)}</span>
 
               {showConfidence && (
                 <span className="opacity-95 font-bold tabular-nums pl-1 border-l border-white/30">

@@ -8,6 +8,7 @@ import {
   detectWithOnnx,
 } from './detectorImplementations';
 import { isServerModel, warmupServerModel, detectOnServer } from './serverDetector';
+import { displayClassLabel, isExcludedClass } from '../utils/boxCalculations';
 import {
   loadGenericDetector,
   detectWithTransformersJs,
@@ -62,6 +63,7 @@ export async function runBrowserDetection(
   try {
     if (isServerModel(modelId)) {
       objects = await detectOnServer(video, modelId, minConfidence, maxDetections);
+      objects = objects.filter((o) => !isExcludedClass(o.class)).map((o) => ({ ...o, class: displayClassLabel(o.class) }));
       return { objects, latencyMs: Math.round(performance.now() - start) };
     }
     switch (modelId) {
@@ -105,6 +107,7 @@ export async function runBrowserDetection(
     objects = [];
   }
 
+  objects = objects.filter((o) => !isExcludedClass(o.class)).map((o) => ({ ...o, class: displayClassLabel(o.class) }));
   const latencyMs = Math.round(performance.now() - start);
   return { objects, latencyMs };
 }

@@ -327,6 +327,7 @@ export function getStoredDetectorModels(): ModelOption[] {
 
 export const COMMON_COCO_CLASSES = [
   'person',
+  'APAR',
   'cell phone',
   'laptop',
   'cup',

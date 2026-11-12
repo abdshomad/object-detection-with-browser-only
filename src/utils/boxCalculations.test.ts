@@ -107,3 +107,20 @@ test('fitBoundingBoxToView covers correctly without offset when aspect ratios ma
   assert.equal(fitted.height, 400);
 });
 
+
+test('displayClassLabel relabels fire hydrant / fire extinguisher as APAR', async () => {
+  const { displayClassLabel } = await import('./boxCalculations');
+  assert.equal(displayClassLabel('fire hydrant'), 'APAR');
+  assert.equal(displayClassLabel('Fire Hydrant'), 'APAR');
+  assert.equal(displayClassLabel('fire extinguisher'), 'APAR');
+  assert.equal(displayClassLabel('person'), 'person');
+});
+
+test('pipe, wall and floor classes are excluded', async () => {
+  const { isExcludedClass } = await import('./boxCalculations');
+  assert.equal(isExcludedClass('pipe'), true);
+  assert.equal(isExcludedClass('Wall'), true);
+  assert.equal(isExcludedClass('FLOOR'), true);
+  assert.equal(isExcludedClass('person'), false);
+  assert.equal(isExcludedClass('fire hydrant'), false);
+});

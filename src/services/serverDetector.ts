@@ -12,7 +12,7 @@ export const SERVER_MODEL_IDS = [
 ] as const;
 
 export function isServerModel(modelId: string): boolean {
-  return (SERVER_MODEL_IDS as readonly string[]).includes(modelId);
+  return (SERVER_MODEL_IDS as readonly string[]).includes(modelId) || modelId.startsWith('custom-');
 }
 
 const warmed = new Set<string>();
